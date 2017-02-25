@@ -27,18 +27,22 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
+import static android.R.attr.key;
+import static android.media.CamcorderProfile.get;
+import static android.provider.CallLog.Calls.NEW;
 import static android.webkit.ConsoleMessage.MessageLevel.LOG;
 
 public class AnagramDictionary {
 
-    private static final int MIN_NUM_ANAGRAMS = 5;
     private static final int DEFAULT_WORD_LENGTH = 3;
+    private static final int MIN_NUM_ANAGRAMS = DEFAULT_WORD_LENGTH;
     private static final int MAX_WORD_LENGTH = 7;
     private Random random = new Random();
     private static ArrayList<String> wordList = new ArrayList<String>();
     private static HashSet<String> wordSet = new HashSet<>();
     private static HashMap<String, ArrayList<String>> lettersToWord = new HashMap<>();
-
+    private static HashMap<Integer, ArrayList<String>> sizeToWords = new HashMap<>();
+    private static int wordLength = DEFAULT_WORD_LENGTH;
 
     private void logKeyValues(String key) {
         ArrayList<String> tmp;
@@ -47,7 +51,6 @@ public class AnagramDictionary {
             Log.v("ANAGRAM-ARRAYLIST", value);
         }
     }
-
 
     public AnagramDictionary(Reader reader) throws IOException {
         BufferedReader in = new BufferedReader(reader);
@@ -65,13 +68,26 @@ public class AnagramDictionary {
                 Log.v("ANAGRAM", "key present: just add V " + "(" + sortedWord + "," + word + ")");
                 ArrayList<String> tmp = lettersToWord.get(sortedWord);
                 tmp.add(word);
-                logKeyValues(sortedWord);
+                //logKeyValues(sortedWord);
             } else {
                 // create list one and store values
                 Log.v("ANAGRAM", "key not present: put new K, V " + "(" + sortedWord + "," + word + ")");
                 ArrayList<String> newValue = new ArrayList<>();
-                newValue.add(sortedWord);
+                newValue.add(word);
                 lettersToWord.put(sortedWord, newValue);
+            }
+
+            // also add the word to sizeToWord hashmap with word length as the key
+            int wordLength = word.length();
+            if (sizeToWords.containsKey(wordLength)) {
+                //Log.v("ANAGRAM", "key present: just add V " + "(" + wordLength + "," + word + ")");
+                ArrayList<String> tmp = sizeToWords.get(wordLength);
+                tmp.add(word);
+            } else {
+                //Log.v("ANAGRAM", "key not present: put new K, V " + "(" + wordLength + "," + word + ")");
+                ArrayList<String> newValue = new ArrayList<>();
+                newValue.add(word);
+                sizeToWords.put(wordLength, newValue);
             }
         }
     }
@@ -131,12 +147,94 @@ public class AnagramDictionary {
         return result;
     }
 
-    public List<String> getAnagramsWithOneMoreLetter(String word) {
+    /**
+     *
+     * @param word
+     * @return
+     *
+     *   implement getAnagramsWithOneMoreLetter which takes a string and finds all anagrams
+     *   that can be formed by adding one letter to that word.
+     */
+    public List<String> getAnagramsWithOneMoreLetter(String targetWord) {
         ArrayList<String> result = new ArrayList<String>();
+        ArrayList<String> candidateWordList = new ArrayList<>();
+        Log.v("ANAGRAM-ONEMORE", targetWord);
+        char ch;
+        for(ch = 'a' ; ch <= 'z' ; ch++) {
+            String newTargetWord = targetWord + ch;
+            Log.v("ANAGRAM-ONEMORE", "base: " + targetWord + " target: " + newTargetWord +
+                    " sorted: " + sortLetters(newTargetWord));
+
+            String hashNewTargetWord = sortLetters(newTargetWord);
+            candidateWordList = lettersToWord.get(hashNewTargetWord);
+
+            if (candidateWordList != null) {
+                //Log.v("ANAGRAM-ONEMORE", "--found out words for hashNewTargetWord: " + hashNewTargetWord);
+                //logKeyValues(hashNewTargetWord);
+                //Log.v("ANAGRAM-ONEMORE", "-------");
+
+                for (String candidateWord : candidateWordList) {
+                    Log.v("ANAGRAM-ONEMORE", "    result added: " + candidateWord);
+                    result.add(candidateWord);
+                }
+
+            } else {
+                Log.v("ANAGRAM-ONEMORE", "  no anagram for " + newTargetWord);
+            }
+        }
         return result;
     }
 
+    /**
+     *
+     * @return
+     *
+     *   Pick a random starting point in the wordList array and check each word in the array
+     *   until you find one that has at least MIN_NUM_ANAGRAMS anagrams.
+     *
+     *   Be sure to handle wrapping around to the start of the array if needed
+     *
+     */
     public String pickGoodStarterWord() {
-        return "stop";
+
+        //Log.v("ANAGRAM-RANDOM", ""+randomIndex);
+        ArrayList<String> newWordList = sizeToWords.get(wordLength);
+        Log.v("PICKGOODSTARTERWORD", "wordlength: " + wordLength + " has " + newWordList.size()
+             + " entries");
+
+        int randomIndex = random.nextInt(newWordList.size());
+        Log.v("PICKGOODSTARTERWORD", "starting randomIndex: " + randomIndex);
+
+        for (int size = 0; size < newWordList.size(); size++) {
+            //Log.v("GOODWORD", "randomIndex: " + randomIndex + " " + wordList.get(randomIndex));
+            //String candidateWord = wordList.get(randomIndex);
+            String candidateWord = newWordList.get(randomIndex);
+            Log.v("PICKGOODWORD", "word: " + candidateWord + " from: index " + randomIndex);
+
+            String hashCandidateWord = sortLetters(candidateWord);
+            ArrayList<String> tmp = lettersToWord.get(hashCandidateWord);
+            Log.v("PICKGOODWORD", "(word,hash)=(" + candidateWord + "," + hashCandidateWord +
+                    ") with freq. " + tmp.size());
+
+            if (tmp.size() > MIN_NUM_ANAGRAMS) {
+                Log.v("GOODWORD_FOUND", "  enough anagrams!  randomIndex: " + randomIndex + " " +
+                        newWordList.get(randomIndex));
+                logKeyValues(hashCandidateWord);
+                break;
+            } else {
+                Log.v("GOODWORD_FOUND", "  no enough anagrams!");
+            }
+
+            randomIndex++;
+            if (randomIndex > (newWordList.size()-1)) {
+                randomIndex = randomIndex - newWordList.size();
+            }
+        }
+        // increment wordLength by one until the MAX_WORD_LENGTH is reached
+        if (wordLength < MAX_WORD_LENGTH) {
+            wordLength++;
+        }
+        Log.v("GOODWORD_FOUND", "Use " + newWordList.get(randomIndex));
+        return newWordList.get(randomIndex);
     }
 }
